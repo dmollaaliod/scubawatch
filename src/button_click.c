@@ -7,6 +7,8 @@ static TextLayer *time_layer;
 static TextLayer *bar_layer;
 static int seconds_elapsed = 0;
 static int bar = 200;
+static bool bar_changed = false;
+static time_t bar_changed_time;
 static struct {
   int time;
   int bar;
@@ -61,6 +63,13 @@ static void render_text() {
 static void tick_handler(struct tm *tick_time, TimeUnits units_changed) {
   seconds_elapsed += 1;
   render_time();
+  if (bar_changed && difftime(time(NULL),bar_changed_time) > 3) {
+    bar_changed = false;
+    bar_readings[bar_i].time = seconds_elapsed;
+    bar_readings[bar_i].bar = bar;
+    render_text();
+    bar_i = (bar_i + 1) % 10;
+  }
 }
   
 static void select_click_handler(ClickRecognizerRef recognizer, void *context) {
@@ -83,11 +92,15 @@ static void select_multi_click_handler(ClickRecognizerRef recognizer, void *cont
 
 static void up_click_handler(ClickRecognizerRef recognizer, void *context) {
   bar += 5;
+  bar_changed = true;
+  bar_changed_time = time(NULL);
   render_bar();
 }
 
 static void down_click_handler(ClickRecognizerRef recognizer, void *context) {
   bar -= 5;
+  bar_changed = true;
+  bar_changed_time = time(NULL);
   render_bar();
 }
 
