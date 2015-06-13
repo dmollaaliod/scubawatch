@@ -1,18 +1,24 @@
 #include <pebble.h>
 #define NBARITEMS 3
+#define LOGITEMS 10
 
+// Main window
 static Window *window;
 static TextLayer *text_layer[NBARITEMS];
 static TextLayer *time_layer;
 static TextLayer *bar_layer;
+
+// Log window
+static Window *log_window;
+static ScrollLayer *log_scroll_layer;
+static TextLayer *log_text_layer[LOGITEMS];
+
+// Other data
 static int seconds_elapsed = 0;
 static int bar = 200;
 static bool bar_changed = false;
 static time_t bar_changed_time;
-static struct {
-  int time;
-  int bar;
-} bar_readings[10];
+static char* bar_readings[LOGITEMS];
 static int bar_i = 0;
 
 static void render_time() {
@@ -34,30 +40,23 @@ static void render_bar() {
 }
 
 static void render_text() {
-//  static char  *buf[] = {"00:00:00 000 bar","00:00:00 000 bar","00:00:00 000 bar"};
-  static char  buf1[] = "00:00:00 000 bar";
-  static char  buf2[] = "00:00:00 000 bar";
-  static char  buf3[] = "00:00:00 000 bar";
-  char buftime[] = "00:00:00";
                            
   for (int i=0; i<NBARITEMS && bar_i-i >= 0; i++) {
     int offset = bar_i - NBARITEMS +1;
     if (offset<0)
       offset = 0;
-    strftime(buftime, sizeof("00:00:00"), "%X", localtime((time_t *) &(bar_readings[offset+i].time)));
-    if (i==0) {
-      snprintf(buf1, sizeof("00:00:00 000 bar"), "%s %i bar", buftime, bar_readings[offset+i].bar);
-      text_layer_set_text(text_layer[i], buf1);
-    }
-    if (i==1) {
-      snprintf(buf2, sizeof("00:00:00 000 bar"), "%s %i bar", buftime, bar_readings[offset+i].bar);
-      text_layer_set_text(text_layer[i], buf2);
-    }
-    if (i==2) {
-      snprintf(buf3, sizeof("00:00:00 000 bar"), "%s %i bar", buftime, bar_readings[offset+i].bar);
-      text_layer_set_text(text_layer[i], buf3);
-    }
+    text_layer_set_text(text_layer[i],bar_readings[offset+i]);    
   }
+}
+
+char *get_bar_reading() {
+  char *result;
+  char buftime[] = "00:00:00";
+  
+  result = malloc(sizeof("00:00:00 000 bar"));
+  strftime(buftime, sizeof("00:00:00"), "%X", localtime((time_t *) &seconds_elapsed));
+  snprintf(result, sizeof("00:00:00 000 bar"), "%s %i bar", buftime, bar);  
+  return result;
 }
 
 static void tick_handler(struct tm *tick_time, TimeUnits units_changed) {
@@ -65,18 +64,17 @@ static void tick_handler(struct tm *tick_time, TimeUnits units_changed) {
   render_time();
   if (bar_changed && difftime(time(NULL),bar_changed_time) > 3) {
     bar_changed = false;
-    bar_readings[bar_i].time = seconds_elapsed;
-    bar_readings[bar_i].bar = bar;
+    bar_readings[bar_i] = get_bar_reading();
     render_text();
-    bar_i = (bar_i + 1) % 10;
+    bar_i = (bar_i + 1) % LOGITEMS;
   }
 }
   
 static void select_click_handler(ClickRecognizerRef recognizer, void *context) {
-  bar_readings[bar_i].time = seconds_elapsed;
-  bar_readings[bar_i].bar = bar;
+  bar_readings[bar_i] = get_bar_reading();
+  bar_changed = false;
   render_text();
-  bar_i = (bar_i + 1) % 10;
+  bar_i = (bar_i + 1) % LOGITEMS;
 }
 
 static void select_multi_click_handler(ClickRecognizerRef recognizer, void *context) {
@@ -88,6 +86,11 @@ static void select_multi_click_handler(ClickRecognizerRef recognizer, void *cont
   bar_i = 0;
   for (int i=0; i<NBARITEMS; i++)
     text_layer_set_text(text_layer[i], "");      
+}
+
+static void select_long_click_handler(ClickRecognizerRef recognizer, void *context) {
+  // Log window
+  window_stack_push(log_window,true);
 }
 
 static void up_click_handler(ClickRecognizerRef recognizer, void *context) {
@@ -107,6 +110,7 @@ static void down_click_handler(ClickRecognizerRef recognizer, void *context) {
 static void click_config_provider(void *context) {
   window_single_click_subscribe(BUTTON_ID_SELECT, select_click_handler);
   window_multi_click_subscribe(BUTTON_ID_SELECT, 2, 10, 0, true, select_multi_click_handler);
+  window_long_click_subscribe(BUTTON_ID_SELECT, 1000, select_long_click_handler, NULL);
   window_single_click_subscribe(BUTTON_ID_UP, up_click_handler);
   window_single_click_subscribe(BUTTON_ID_DOWN, down_click_handler);
 }
@@ -114,6 +118,8 @@ static void click_config_provider(void *context) {
 static void window_load(Window *window) {
   Layer *window_layer = window_get_root_layer(window);
   GRect bounds = layer_get_bounds(window_layer);
+
+  window_set_click_config_provider(window, click_config_provider);
 
   // Time layer
   time_layer = text_layer_create((GRect) { .origin = { 0, 110 }, .size = { bounds.size.w, 40 } });
@@ -148,17 +154,47 @@ static void window_unload(Window *window) {
   text_layer_destroy(bar_layer);
 }
 
+static void log_window_load(Window *window) {
+  Layer *window_layer = window_get_root_layer(window);
+  GRect bounds = layer_get_bounds(window_layer);
+  
+  log_scroll_layer = scroll_layer_create(bounds);
+  scroll_layer_set_content_size(log_scroll_layer, (GSize) { bounds.size.w, 25*LOGITEMS });
+  scroll_layer_set_click_config_onto_window(log_scroll_layer, window);
+
+  for (int i=0; i<LOGITEMS; i++) {
+    log_text_layer[i] = text_layer_create((GRect) { .origin = { 0, i*25 }, .size = { bounds.size.w, 25 } });
+    text_layer_set_font(log_text_layer[i], fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
+    text_layer_set_text(log_text_layer[i], bar_readings[i]);
+    scroll_layer_add_child(log_scroll_layer, text_layer_get_layer(log_text_layer[i]));
+  }
+  layer_add_child(window_layer, scroll_layer_get_layer(log_scroll_layer));  
+}
+
+static void log_window_unload(Window *window) {
+  for (int i=0; i<LOGITEMS; i++)
+    text_layer_destroy(log_text_layer[i]);
+  scroll_layer_destroy(log_scroll_layer);
+}
+
 static void init(void) {
   // Register with TickTimerService
   tick_timer_service_subscribe(SECOND_UNIT, tick_handler);
 
   // Create window
   window = window_create();
-  window_set_click_config_provider(window, click_config_provider);
   window_set_window_handlers(window, (WindowHandlers) {
 	.load = window_load,
     .unload = window_unload,
   });
+  
+  // Create log window
+  log_window = window_create();
+  window_set_window_handlers(log_window, (WindowHandlers) {
+	.load = log_window_load,
+    .unload = log_window_unload,
+  });
+  
   const bool animated = true;
   window_stack_push(window, animated);
 }
