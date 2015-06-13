@@ -1,0 +1,23 @@
+{
+    "appKeys": {},
+    "capabilities": [
+        ""
+    ],
+    "companyName": "dmollaaliod@gmail.com",
+    "longName": "Scubawatch",
+    "projectType": "native",
+    "resources": {
+        "media": []
+    },
+    "sdkVersion": "3",
+    "shortName": "Scubawatch",
+    "targetPlatforms": [
+        "aplite",
+        "basalt"
+    ],
+    "uuid": "3d701546-7fc9-4128-86c0-c61d5ec1c90a",
+    "versionLabel": "1.0",
+    "watchapp": {
+        "watchface": false
+    }
+}
