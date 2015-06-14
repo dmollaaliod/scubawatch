@@ -7,7 +7,19 @@
     "longName": "Scubawatch",
     "projectType": "native",
     "resources": {
-        "media": []
+        "media": [
+            {
+                "file": "images/screenshot2.png",
+                "name": "screenshot2",
+                "type": "png"
+            },
+            {
+                "file": "images/screenshot1.png",
+                "menuIcon": true,
+                "name": "screenshot",
+                "type": "png"
+            }
+        ]
     },
     "sdkVersion": "3",
     "shortName": "Scubawatch",
