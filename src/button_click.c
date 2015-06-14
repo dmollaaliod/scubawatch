@@ -1,7 +1,12 @@
 #include <pebble.h>
 #define NBARITEMS 3
-#define LOGITEMS 10
+#define LOGITEMS 20
 
+#define PERSIST_BAR_I 1
+#define PERSIST_ITEM 10
+#define PERSIST_SECONDS 2
+#define PERSIST_BAR 3
+  
 // Main window
 static Window *window;
 static TextLayer *text_layer[NBARITEMS];
@@ -66,7 +71,8 @@ static void tick_handler(struct tm *tick_time, TimeUnits units_changed) {
     bar_changed = false;
     bar_readings[bar_i] = get_bar_reading();
     render_text();
-    bar_i = (bar_i + 1) % LOGITEMS;
+    if (bar_i < LOGITEMS-1)
+      bar_i += 1;
   }
 }
   
@@ -74,7 +80,8 @@ static void select_click_handler(ClickRecognizerRef recognizer, void *context) {
   bar_readings[bar_i] = get_bar_reading();
   bar_changed = false;
   render_text();
-  bar_i = (bar_i + 1) % LOGITEMS;
+  if (bar_i < LOGITEMS-1)
+    bar_i += 1;
 }
 
 static void select_multi_click_handler(ClickRecognizerRef recognizer, void *context) {
@@ -83,9 +90,13 @@ static void select_multi_click_handler(ClickRecognizerRef recognizer, void *cont
   render_time();
   bar = 200;
   render_bar();
+  for (int i=0; i<bar_i; i++) {
+    free(bar_readings[bar_i]);
+  }
   bar_i = 0;
   for (int i=0; i<NBARITEMS; i++)
     text_layer_set_text(text_layer[i], "");      
+    
 }
 
 static void select_long_click_handler(ClickRecognizerRef recognizer, void *context) {
@@ -145,6 +156,7 @@ static void window_load(Window *window) {
     text_layer_set_text_alignment(text_layer[i], GTextAlignmentLeft);
     layer_add_child(window_layer, text_layer_get_layer(text_layer[i]));
   }
+  render_text();
 }
 
 static void window_unload(Window *window) {
@@ -159,10 +171,10 @@ static void log_window_load(Window *window) {
   GRect bounds = layer_get_bounds(window_layer);
   
   log_scroll_layer = scroll_layer_create(bounds);
-  scroll_layer_set_content_size(log_scroll_layer, (GSize) { bounds.size.w, 25*LOGITEMS });
+  scroll_layer_set_content_size(log_scroll_layer, (GSize) { bounds.size.w, 25*bar_i });
   scroll_layer_set_click_config_onto_window(log_scroll_layer, window);
 
-  for (int i=0; i<LOGITEMS; i++) {
+  for (int i=0; i<bar_i; i++) {
     log_text_layer[i] = text_layer_create((GRect) { .origin = { 0, i*25 }, .size = { bounds.size.w, 25 } });
     text_layer_set_font(log_text_layer[i], fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
     text_layer_set_text(log_text_layer[i], bar_readings[i]);
@@ -172,7 +184,7 @@ static void log_window_load(Window *window) {
 }
 
 static void log_window_unload(Window *window) {
-  for (int i=0; i<LOGITEMS; i++)
+  for (int i=0; i<bar_i; i++)
     text_layer_destroy(log_text_layer[i]);
   scroll_layer_destroy(log_scroll_layer);
 }
@@ -195,11 +207,40 @@ static void init(void) {
     .unload = log_window_unload,
   });
   
+  // Load persistent data
+  if (persist_exists(PERSIST_BAR_I)) {
+    bar_i = persist_read_int(PERSIST_BAR_I);
+    for (int i=0; i<bar_i; i++) {
+      if (persist_exists(PERSIST_ITEM+i)) {
+        char *s = malloc(sizeof("00:00:00 000 bar"));
+        bar_readings[i] = s;
+        persist_read_string(PERSIST_ITEM+i,bar_readings[i],sizeof("00:00:00 000 bar"));
+      }
+    }
+  }
+  
+  if (persist_exists(PERSIST_SECONDS)) {
+    seconds_elapsed = persist_read_int(PERSIST_SECONDS);//+time(NULL)-persist_read_int(PERSIST_TIME);
+  }
+
+  if (persist_exists(PERSIST_BAR)) {
+    bar = persist_read_int(PERSIST_BAR);
+  }
+
   const bool animated = true;
   window_stack_push(window, animated);
 }
 
 static void deinit(void) {
+  // Store persistent data
+  persist_write_int(PERSIST_BAR_I, bar_i);
+  for (int i=0; i<bar_i; i++) {
+    persist_write_string(PERSIST_ITEM+i,bar_readings[i]);
+  }
+  persist_write_int(PERSIST_SECONDS, seconds_elapsed);
+  persist_write_int(PERSIST_BAR, bar);
+  //persist_write_int(PERSIST_TIME, time(NULL));
+  
   window_destroy(window);
 }
 
@@ -208,87 +249,3 @@ int main(void) {
   app_event_loop();
   deinit();
 }
-
-/*
-#include <pebble.h>
-  
-static Window *s_main_window;
-static TextLayer *s_time_layer;
-
-static void update_time() {
-
-  // Get a tm structure
-  time_t temp = time(NULL); 
-  struct tm *tick_time = localtime(&temp);
-
-  // Create a long-lived buffer
-  static char buffer[] = "00:00";
-
-  // Write the current hours and minutes into the buffer
-  if(clock_is_24h_style() == true) {
-    // Use 24 hour format
-    strftime(buffer, sizeof("00:00"), "%H:%M", tick_time);
-  } else {
-    // Use 12 hour format
-    strftime(buffer, sizeof("00:00"), "%I:%M", tick_time);
-  }
-
-  // Display this time on the TextLayer
-  text_layer_set_text(s_time_layer, buffer);
-}
-
-static void main_window_load(Window *window) {
-
-  // Create time TextLayer
-  s_time_layer = text_layer_create(GRect(0, 55, 144, 50));
-  text_layer_set_background_color(s_time_layer, GColorClear);
-  text_layer_set_text_color(s_time_layer, GColorBlack);
-
-  // Improve the layout to be more like a watchface
-  text_layer_set_font(s_time_layer, fonts_get_system_font(FONT_KEY_BITHAM_42_BOLD));
-  text_layer_set_text_alignment(s_time_layer, GTextAlignmentCenter);
-
-  // Add it as a child layer to the Window's root layer
-  layer_add_child(window_get_root_layer(window), text_layer_get_layer(s_time_layer));
-}
-
-static void main_window_unload(Window *window) {
-  // Destroy TextLayer
-  text_layer_destroy(s_time_layer);
-}
-
-static void tick_handler(struct tm *tick_time, TimeUnits units_changed) {
-  update_time();
-}
-
-static void init() {
-  // Register with TickTimerService
-  tick_timer_service_subscribe(MINUTE_UNIT, tick_handler);
-  
-  // Create main Window element and assign to pointer
-  s_main_window = window_create();
-
-  // Set handlers to manage the elements inside the Window
-  window_set_window_handlers(s_main_window, (WindowHandlers) {
-    .load = main_window_load,
-    .unload = main_window_unload
-  });
-
-  // Show the Window on the watch, with animated=true
-  window_stack_push(s_main_window, true);
-
-  // Make sure the time is displayed from the start
-  update_time();
-}
-
-static void deinit() {
-    // Destroy Window
-    window_destroy(s_main_window);
-}
-
-int main(void) {
-  init();
-  app_event_loop();
-  deinit();
-}
-*/
