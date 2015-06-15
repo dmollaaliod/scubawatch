@@ -45,11 +45,10 @@ static void render_bar() {
 }
 
 static void render_text() {
-                           
-  for (int i=0; i<NBARITEMS && bar_i-i >= 0; i++) {
-    int offset = bar_i - NBARITEMS +1;
-    if (offset<0)
+  int offset = bar_i - NBARITEMS;
+  if (offset<0)
       offset = 0;
+  for (int i=0; i<NBARITEMS && offset+i < bar_i; i++) {
     text_layer_set_text(text_layer[i],bar_readings[offset+i]);    
   }
 }
@@ -69,19 +68,21 @@ static void tick_handler(struct tm *tick_time, TimeUnits units_changed) {
   render_time();
   if (bar_changed && difftime(time(NULL),bar_changed_time) > 3) {
     bar_changed = false;
-    bar_readings[bar_i] = get_bar_reading();
-    render_text();
-    if (bar_i < LOGITEMS-1)
+    if (bar_i < LOGITEMS) {
+      bar_readings[bar_i] = get_bar_reading();
       bar_i += 1;
+    }
+    render_text();
   }
 }
   
 static void select_click_handler(ClickRecognizerRef recognizer, void *context) {
-  bar_readings[bar_i] = get_bar_reading();
   bar_changed = false;
-  render_text();
-  if (bar_i < LOGITEMS-1)
+  if (bar_i < LOGITEMS) {
+    bar_readings[bar_i] = get_bar_reading();
     bar_i += 1;
+  }
+  render_text();
 }
 
 static void select_multi_click_handler(ClickRecognizerRef recognizer, void *context) {
@@ -90,13 +91,13 @@ static void select_multi_click_handler(ClickRecognizerRef recognizer, void *cont
   render_time();
   bar = 200;
   render_bar();
-  for (int i=0; i<bar_i; i++) {
-    free(bar_readings[bar_i]);
-  }
+  //for (int i=0; i<bar_i; i++) {
+  //  free(bar_readings[bar_i]);
+  //}
   bar_i = 0;
-  for (int i=0; i<NBARITEMS; i++)
+  for (int i=0; i<NBARITEMS; i++) {
     text_layer_set_text(text_layer[i], "");      
-    
+  }
 }
 
 static void select_long_click_handler(ClickRecognizerRef recognizer, void *context) {
@@ -156,7 +157,6 @@ static void window_load(Window *window) {
     text_layer_set_text_alignment(text_layer[i], GTextAlignmentLeft);
     layer_add_child(window_layer, text_layer_get_layer(text_layer[i]));
   }
-  render_text();
 }
 
 static void window_unload(Window *window) {
@@ -226,9 +226,11 @@ static void init(void) {
   if (persist_exists(PERSIST_BAR)) {
     bar = persist_read_int(PERSIST_BAR);
   }
-
+  
   const bool animated = true;
   window_stack_push(window, animated);
+
+  render_text();
 }
 
 static void deinit(void) {
