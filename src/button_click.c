@@ -1,13 +1,14 @@
 #include <pebble.h>
 #define NBARITEMS 3
-#define LOGITEMS 20
-#define VIBES_INTERVAL 60
+#define LOGITEMS 30
+#define VIBES_INTERVAL 300 // 5-minute interval
 
 #define PERSIST_BAR_I 1
 #define PERSIST_ITEM 10
 #define PERSIST_SECONDS 2
 #define PERSIST_SECONDS_NEXT_VIBES 4
-#define PERSIST_BAR 3  
+#define PERSIST_BAR 3
+#define PERSIST_TIME 5
   
 // Main window
 static Window *window;
@@ -235,11 +236,11 @@ static void init(void) {
   }
   
   if (persist_exists(PERSIST_SECONDS)) {
-    seconds_elapsed = persist_read_int(PERSIST_SECONDS);//+time(NULL)-persist_read_int(PERSIST_TIME);
+    seconds_elapsed = persist_read_int(PERSIST_SECONDS)+(time(NULL)-persist_read_int(PERSIST_TIME));
   }
 
   if (persist_exists(PERSIST_SECONDS_NEXT_VIBES)) {
-    seconds_next_vibes = persist_read_int(PERSIST_SECONDS_NEXT_VIBES);//+time(NULL)-persist_read_int(PERSIST_TIME);
+    seconds_next_vibes = persist_read_int(PERSIST_SECONDS_NEXT_VIBES);
   }
 
   if (persist_exists(PERSIST_BAR)) {
@@ -261,7 +262,7 @@ static void deinit(void) {
   persist_write_int(PERSIST_SECONDS, seconds_elapsed);
   persist_write_int(PERSIST_SECONDS_NEXT_VIBES, seconds_next_vibes);
   persist_write_int(PERSIST_BAR, bar);
-  //persist_write_int(PERSIST_TIME, time(NULL));
+  persist_write_int(PERSIST_TIME, time(NULL));
   
   window_destroy(window);
 }
