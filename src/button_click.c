@@ -1,11 +1,13 @@
 #include <pebble.h>
 #define NBARITEMS 3
 #define LOGITEMS 20
+#define VIBES_INTERVAL 60
 
 #define PERSIST_BAR_I 1
 #define PERSIST_ITEM 10
 #define PERSIST_SECONDS 2
-#define PERSIST_BAR 3
+#define PERSIST_SECONDS_NEXT_VIBES 4
+#define PERSIST_BAR 3  
   
 // Main window
 static Window *window;
@@ -20,6 +22,7 @@ static TextLayer *log_text_layer[LOGITEMS];
 
 // Other data
 static int seconds_elapsed = 0;
+static int seconds_next_vibes = VIBES_INTERVAL;
 static int bar = 200;
 static bool bar_changed = false;
 static time_t bar_changed_time;
@@ -67,20 +70,31 @@ static void tick_handler(struct tm *tick_time, TimeUnits units_changed) {
   seconds_elapsed += 1;
   render_time();
   if (bar_changed && difftime(time(NULL),bar_changed_time) > 3) {
+    while (seconds_next_vibes < seconds_elapsed) {
+      seconds_next_vibes += VIBES_INTERVAL;
+    }
     bar_changed = false;
     if (bar_i < LOGITEMS) {
       bar_readings[bar_i] = get_bar_reading();
       bar_i += 1;
+      vibes_short_pulse();
     }
     render_text();
+  }
+  if (seconds_next_vibes <= seconds_elapsed) {
+    vibes_long_pulse();
   }
 }
   
 static void select_click_handler(ClickRecognizerRef recognizer, void *context) {
+  while (seconds_next_vibes < seconds_elapsed) {
+    seconds_next_vibes += VIBES_INTERVAL;
+  }
   bar_changed = false;
   if (bar_i < LOGITEMS) {
     bar_readings[bar_i] = get_bar_reading();
     bar_i += 1;
+    vibes_short_pulse();
   }
   render_text();
 }
@@ -88,6 +102,7 @@ static void select_click_handler(ClickRecognizerRef recognizer, void *context) {
 static void select_multi_click_handler(ClickRecognizerRef recognizer, void *context) {
   // Reset timer
   seconds_elapsed = 0;
+  seconds_next_vibes = VIBES_INTERVAL;
   render_time();
   bar = 200;
   render_bar();
@@ -223,6 +238,10 @@ static void init(void) {
     seconds_elapsed = persist_read_int(PERSIST_SECONDS);//+time(NULL)-persist_read_int(PERSIST_TIME);
   }
 
+  if (persist_exists(PERSIST_SECONDS_NEXT_VIBES)) {
+    seconds_next_vibes = persist_read_int(PERSIST_SECONDS_NEXT_VIBES);//+time(NULL)-persist_read_int(PERSIST_TIME);
+  }
+
   if (persist_exists(PERSIST_BAR)) {
     bar = persist_read_int(PERSIST_BAR);
   }
@@ -240,6 +259,7 @@ static void deinit(void) {
     persist_write_string(PERSIST_ITEM+i,bar_readings[i]);
   }
   persist_write_int(PERSIST_SECONDS, seconds_elapsed);
+  persist_write_int(PERSIST_SECONDS_NEXT_VIBES, seconds_next_vibes);
   persist_write_int(PERSIST_BAR, bar);
   //persist_write_int(PERSIST_TIME, time(NULL));
   
