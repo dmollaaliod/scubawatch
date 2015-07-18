@@ -1,5 +1,5 @@
 #include <pebble.h>
-#define NBARITEMS 3
+#define NBARITEMS 2
 #define LOGITEMS 30
 #define VIBES_INTERVAL 300 // 5-minute interval
 
@@ -15,6 +15,7 @@ static Window *window;
 static TextLayer *text_layer[NBARITEMS];
 static TextLayer *time_layer;
 static TextLayer *bar_layer;
+static TextLayer *bar_label;
 
 // Log window
 static Window *log_window;
@@ -29,6 +30,7 @@ static bool bar_changed = false;
 static time_t bar_changed_time;
 static char* bar_readings[LOGITEMS];
 static int bar_i = 0;
+static int main_window = true;
 
 static void render_time() {
   
@@ -43,8 +45,8 @@ static void render_time() {
 }
 
 static void render_bar() {
-  static char buf[] = "000 bar";
-  snprintf(buf, sizeof(buf), "%i bar", bar);
+  static char buf[] = "000";
+  snprintf(buf, sizeof(buf), "%i", bar);
   text_layer_set_text(bar_layer, buf);
 }
 
@@ -82,7 +84,7 @@ static void tick_handler(struct tm *tick_time, TimeUnits units_changed) {
     }
     render_text();
   }
-  if (seconds_next_vibes <= seconds_elapsed) {
+  if (main_window && (seconds_next_vibes <= seconds_elapsed)) {
     vibes_long_pulse();
   }
 }
@@ -153,21 +155,27 @@ static void window_load(Window *window) {
   time_layer = text_layer_create((GRect) { .origin = { 0, 110 }, .size = { bounds.size.w, 40 } });
   text_layer_set_background_color(time_layer, GColorBlack);
   text_layer_set_text_color(time_layer, GColorClear);
-  text_layer_set_font(time_layer, fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD));
-  text_layer_set_text_alignment(time_layer, GTextAlignmentCenter);
+  text_layer_set_font(time_layer, fonts_get_system_font(FONT_KEY_BITHAM_34_MEDIUM_NUMBERS));
+  text_layer_set_text_alignment(time_layer, GTextAlignmentLeft);
   layer_add_child(window_layer, text_layer_get_layer(time_layer));
   render_time();
   
   // Bar layer
-  bar_layer = text_layer_create((GRect) { .origin = { 0, 0 }, .size = { bounds.size.w, 40 } });
-  text_layer_set_font(bar_layer, fonts_get_system_font(FONT_KEY_BITHAM_30_BLACK));
+  bar_layer = text_layer_create((GRect) { .origin = { 0, 0 }, .size = { 90, 50 } });
+  text_layer_set_font(bar_layer, fonts_get_system_font(FONT_KEY_ROBOTO_BOLD_SUBSET_49));
   text_layer_set_text_alignment(bar_layer, GTextAlignmentCenter);
   layer_add_child(window_layer, text_layer_get_layer(bar_layer));
   render_bar();
   
+  // Bar label
+  bar_label = text_layer_create((GRect) { .origin = { 90, 20}, .size = { 100, 40} });
+  text_layer_set_font(bar_label, fonts_get_system_font(FONT_KEY_BITHAM_30_BLACK));
+  text_layer_set_text(bar_label, "bar");
+  layer_add_child(window_layer, text_layer_get_layer(bar_label));
+  
   // Text layer
   for (int i=0; i<NBARITEMS; i++) {
-    text_layer[i] = text_layer_create((GRect) { .origin = { 0, 30+i*25 }, .size = { bounds.size.w, 25 } });
+    text_layer[i] = text_layer_create((GRect) { .origin = { 0, 50+i*25 }, .size = { bounds.size.w, 25 } });
     text_layer_set_text(text_layer[i], "");
     text_layer_set_font(text_layer[i], fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
     text_layer_set_text_alignment(text_layer[i], GTextAlignmentLeft);
@@ -185,6 +193,7 @@ static void window_unload(Window *window) {
 static void log_window_load(Window *window) {
   Layer *window_layer = window_get_root_layer(window);
   GRect bounds = layer_get_bounds(window_layer);
+  main_window = false;
   
   log_scroll_layer = scroll_layer_create(bounds);
   scroll_layer_set_content_size(log_scroll_layer, (GSize) { bounds.size.w, 25*bar_i });
@@ -203,6 +212,7 @@ static void log_window_unload(Window *window) {
   for (int i=0; i<bar_i; i++)
     text_layer_destroy(log_text_layer[i]);
   scroll_layer_destroy(log_scroll_layer);
+  main_window = true;
 }
 
 static void init(void) {
