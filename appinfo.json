@@ -9,12 +9,7 @@
     "resources": {
         "media": [
             {
-                "file": "images/screenshot2.png",
-                "name": "screenshot2",
-                "type": "png"
-            },
-            {
-                "file": "images/screenshot1.png",
+                "file": "images/screenshot.png",
                 "menuIcon": true,
                 "name": "screenshot",
                 "type": "png"
@@ -28,7 +23,7 @@
         "basalt"
     ],
     "uuid": "3d701546-7fc9-4128-86c0-c61d5ec1c90a",
-    "versionLabel": "1.2",
+    "versionLabel": "1.3",
     "watchapp": {
         "watchface": false
     }
