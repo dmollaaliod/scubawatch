@@ -24,9 +24,14 @@ static const GPathInfo NEEDLE_SOUTH_POINTS = {
 static Window *window;
 static Layer *needles_layer;
 static TextLayer *degrees_layer;
+static TextLayer *calibrating_layer;
+static char calibrating[] = "calibrating";
+static char calibrated[] =  "           ";
 static TextLayer *time_layer;
 static TextLayer *bar_layer;
+static char bar_text[] = "000";
 static TextLayer *bar_label;
+static char bar_label_text[] = "bar";
 
 // Log window
 static Window *log_window;
@@ -72,9 +77,8 @@ static void render_time() {
 }
 
 static void render_bar() {
-  static char buf[] = "000";
-  snprintf(buf, sizeof(buf), "%i", bar);
-  text_layer_set_text(bar_layer, buf);
+  snprintf(bar_text, sizeof(bar_text), "%i", bar);
+  text_layer_set_text(bar_layer, bar_text);
 }
 
 char *get_bar_reading() {
@@ -115,11 +119,21 @@ static void tick_handler(struct tm *tick_time, TimeUnits units_changed) {
     vibes_long_pulse();
   }
   
-  text_layer_set_text(degrees_layer, get_compass_heading());
-  
-  // rotate needle accordingly
+  // display calibration and heading
   CompassHeadingData data;
   compass_service_peek(&data);
+  if (data.compass_status == CompassStatusCalibrated) {
+    text_layer_set_text(calibrating_layer,calibrated);
+  } else {
+    text_layer_set_text(calibrating_layer,calibrating);    
+  }
+  if (data.compass_status == CompassStatusDataInvalid) {
+    text_layer_set_text(degrees_layer, "---°");
+  } else {
+    text_layer_set_text(degrees_layer, get_compass_heading());
+  }
+  
+  // rotate needle accordingly
   gpath_rotate_to(s_needle_north, data.true_heading);
   gpath_rotate_to(s_needle_south, data.true_heading);
 
@@ -208,7 +222,7 @@ static void window_load(Window *window) {
   // Bar label
   bar_label = text_layer_create((GRect) { .origin = { 90, 20}, .size = { 100, 40} });
   text_layer_set_font(bar_label, fonts_get_system_font(FONT_KEY_BITHAM_30_BLACK));
-  text_layer_set_text(bar_label, "bar");
+  text_layer_set_text(bar_label, bar_label_text);
   layer_add_child(window_layer, text_layer_get_layer(bar_label));
   
   // Compass needles
@@ -229,16 +243,24 @@ static void window_load(Window *window) {
 
   
   // Compass direction
-  degrees_layer = text_layer_create((GRect) { .origin = { 60, 60 }, .size = { bounds.size.w, 40 } });
+  degrees_layer = text_layer_create((GRect) { .origin = { 60, 55 }, .size = { bounds.size.w, 40 } });
   text_layer_set_text(degrees_layer, "");
   text_layer_set_font(degrees_layer, fonts_get_system_font(FONT_KEY_BITHAM_30_BLACK));
   text_layer_set_text_alignment(degrees_layer, GTextAlignmentLeft);
   layer_add_child(window_layer, text_layer_get_layer(degrees_layer));
+  
+  // Calibration label
+  calibrating_layer = text_layer_create((GRect) { .origin = { 60, 85 }, .size = { bounds.size.w, 20 } });
+  text_layer_set_text(calibrating_layer, "");
+//  text_layer_set_font(calibrating_layer, fonts_get_system_font(FONT_KEY_));
+  text_layer_set_text_alignment(calibrating_layer, GTextAlignmentLeft);
+  layer_add_child(window_layer, text_layer_get_layer(calibrating_layer));
 }
 
 static void window_unload(Window *window) {
   layer_destroy(needles_layer);
   text_layer_destroy(degrees_layer);
+  text_layer_destroy(calibrating_layer);
   text_layer_destroy(time_layer);
   text_layer_destroy(bar_layer);
   text_layer_destroy(bar_label);
