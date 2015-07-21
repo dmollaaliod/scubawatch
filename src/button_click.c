@@ -1,6 +1,5 @@
 #include <pebble.h>
-#define NBARITEMS 2
-#define LOGITEMS 30
+#define LOGITEMS 50
 #define VIBES_INTERVAL 300 // 5-minute interval
 
 #define PERSIST_BAR_I 1
@@ -9,10 +8,22 @@
 #define PERSIST_SECONDS_NEXT_VIBES 4
 #define PERSIST_BAR 3
 #define PERSIST_TIME 5
+
+// Compass
+static GPath *s_needle_north, *s_needle_south;
+static const GPathInfo NEEDLE_NORTH_POINTS = { 
+  3,
+  (GPoint[]) { { -6, 0 }, { 6, 0 }, { 0, -27 } }
+};
+static const GPathInfo NEEDLE_SOUTH_POINTS = { 
+  3,
+  (GPoint[]) { { 5, 0 }, { 0, 25 }, { -5, 0 } }
+};
   
 // Main window
 static Window *window;
-static TextLayer *text_layer[NBARITEMS];
+static Layer *needles_layer;
+static TextLayer *degrees_layer;
 static TextLayer *time_layer;
 static TextLayer *bar_layer;
 static TextLayer *bar_label;
@@ -32,6 +43,22 @@ static char* bar_readings[LOGITEMS];
 static int bar_i = 0;
 static int main_window = true;
 
+static void path_layer_update_callback(Layer *path, GContext *ctx) {
+  // Draw the needles
+  
+  gpath_draw_filled(ctx, s_needle_north);       
+  gpath_draw_outline(ctx, s_needle_south);                     
+
+  // creating centerpoint                 
+  GRect bounds = layer_get_frame(path);          
+  GPoint path_center = GPoint(bounds.size.w / 2, bounds.size.h / 2);  
+  graphics_fill_circle(ctx, path_center, 3);       
+
+  // then put a white circle on top               
+  graphics_context_set_fill_color(ctx, GColorWhite);
+  graphics_fill_circle(ctx, path_center, 2);                      
+}
+
 static void render_time() {
   
   // Create a long-lived buffer
@@ -50,15 +77,6 @@ static void render_bar() {
   text_layer_set_text(bar_layer, buf);
 }
 
-static void render_text() {
-  int offset = bar_i - NBARITEMS;
-  if (offset<0)
-      offset = 0;
-  for (int i=0; i<NBARITEMS && offset+i < bar_i; i++) {
-    text_layer_set_text(text_layer[i],bar_readings[offset+i]);    
-  }
-}
-
 char *get_bar_reading() {
   char *result;
   char buftime[] = "00:00:00";
@@ -66,6 +84,16 @@ char *get_bar_reading() {
   result = malloc(sizeof("00:00:00 000 bar"));
   strftime(buftime, sizeof("00:00:00"), "%X", localtime((time_t *) &seconds_elapsed));
   snprintf(result, sizeof("00:00:00 000 bar"), "%s %i bar", buftime, bar);  
+  return result;
+}
+
+char *get_compass_heading() {
+  char *result;
+  CompassHeadingData data;
+  
+  result = malloc(sizeof("000°"));
+  compass_service_peek(&data);
+  snprintf(result, sizeof("000°"), "%d°", 365-TRIGANGLE_TO_DEG((int)data.true_heading));
   return result;
 }
 
@@ -82,24 +110,36 @@ static void tick_handler(struct tm *tick_time, TimeUnits units_changed) {
       bar_i += 1;
       vibes_short_pulse();
     }
-    render_text();
   }
   if (main_window && (seconds_next_vibes <= seconds_elapsed)) {
     vibes_long_pulse();
   }
+  
+  text_layer_set_text(degrees_layer, get_compass_heading());
+  
+  // rotate needle accordingly
+  CompassHeadingData data;
+  compass_service_peek(&data);
+  gpath_rotate_to(s_needle_north, data.true_heading);
+  gpath_rotate_to(s_needle_south, data.true_heading);
+
 }
   
 static void select_click_handler(ClickRecognizerRef recognizer, void *context) {
-  while (seconds_next_vibes < seconds_elapsed) {
-    seconds_next_vibes += VIBES_INTERVAL;
-  }
-  bar_changed = false;
+  char buftime[] = "00:00:00";
+  char *buffer;
+  char *heading;
+
   if (bar_i < LOGITEMS) {
-    bar_readings[bar_i] = get_bar_reading();
+    buffer = malloc(sizeof("00:00:00 000°"));
+    strftime(buftime, sizeof("00:00:00"), "%X", localtime((time_t *) &seconds_elapsed));
+    heading = get_compass_heading();
+    snprintf(buffer, sizeof("00:00:00 000°"), "%s %s", buftime, heading);
+    free(heading);
+    bar_readings[bar_i] = buffer;
     bar_i += 1;
     vibes_short_pulse();
   }
-  render_text();
 }
 
 static void select_multi_click_handler(ClickRecognizerRef recognizer, void *context) {
@@ -113,9 +153,7 @@ static void select_multi_click_handler(ClickRecognizerRef recognizer, void *cont
   //  free(bar_readings[bar_i]);
   //}
   bar_i = 0;
-  for (int i=0; i<NBARITEMS; i++) {
-    text_layer_set_text(text_layer[i], "");      
-  }
+  text_layer_set_text(degrees_layer, "");      
 }
 
 static void select_long_click_handler(ClickRecognizerRef recognizer, void *context) {
@@ -173,21 +211,37 @@ static void window_load(Window *window) {
   text_layer_set_text(bar_label, "bar");
   layer_add_child(window_layer, text_layer_get_layer(bar_label));
   
-  // Text layer
-  for (int i=0; i<NBARITEMS; i++) {
-    text_layer[i] = text_layer_create((GRect) { .origin = { 0, 50+i*25 }, .size = { bounds.size.w, 25 } });
-    text_layer_set_text(text_layer[i], "");
-    text_layer_set_font(text_layer[i], fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
-    text_layer_set_text_alignment(text_layer[i], GTextAlignmentLeft);
-    layer_add_child(window_layer, text_layer_get_layer(text_layer[i]));
-  }
+  // Compass needles
+  needles_layer = layer_create((GRect) { .origin = { 0, 55 }, .size = { 50, 50 } });
+  
+  //  Define the draw callback to use for this layer
+  layer_set_update_proc(needles_layer, path_layer_update_callback);
+  layer_add_child(window_layer, needles_layer);
+
+  // Initialize and define the two paths used to draw the needle to north and to south
+  s_needle_north = gpath_create(&NEEDLE_NORTH_POINTS);
+  s_needle_south = gpath_create(&NEEDLE_SOUTH_POINTS);
+
+  // Move the needles to the center of the screen.
+  GPoint center = GPoint(25, 25);
+  gpath_move_to(s_needle_north, center);
+  gpath_move_to(s_needle_south, center);
+
+  
+  // Compass direction
+  degrees_layer = text_layer_create((GRect) { .origin = { 60, 60 }, .size = { bounds.size.w, 40 } });
+  text_layer_set_text(degrees_layer, "");
+  text_layer_set_font(degrees_layer, fonts_get_system_font(FONT_KEY_BITHAM_30_BLACK));
+  text_layer_set_text_alignment(degrees_layer, GTextAlignmentLeft);
+  layer_add_child(window_layer, text_layer_get_layer(degrees_layer));
 }
 
 static void window_unload(Window *window) {
-  for (int i=0; i<NBARITEMS; i++)
-    text_layer_destroy(text_layer[i]);
+  layer_destroy(needles_layer);
+  text_layer_destroy(degrees_layer);
   text_layer_destroy(time_layer);
   text_layer_destroy(bar_layer);
+  text_layer_destroy(bar_label);
 }
 
 static void log_window_load(Window *window) {
@@ -259,8 +313,6 @@ static void init(void) {
   
   const bool animated = true;
   window_stack_push(window, animated);
-
-  render_text();
 }
 
 static void deinit(void) {
