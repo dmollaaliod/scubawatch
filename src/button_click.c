@@ -27,9 +27,9 @@ static TextLayer *degrees_layer;
 static TextLayer *calibrating_layer;
 static char calibrating[] = "calibrating";
 static char calibrated[] =  "           ";
+static char degrees_text[] = "---°";
 static TextLayer *time_layer;
 static TextLayer *bar_layer;
-static char bar_text[] = "000";
 static TextLayer *bar_label;
 static char bar_label_text[] = "bar";
 
@@ -77,11 +77,12 @@ static void render_time() {
 }
 
 static void render_bar() {
+  static char bar_text[] = "000";
   snprintf(bar_text, sizeof(bar_text), "%i", bar);
   text_layer_set_text(bar_layer, bar_text);
 }
 
-char *get_bar_reading() {
+static char *get_bar_reading() {
   char *result;
   char buftime[] = "00:00:00";
   
@@ -91,14 +92,11 @@ char *get_bar_reading() {
   return result;
 }
 
-char *get_compass_heading() {
-  char *result;
+static int get_compass_heading() {
   CompassHeadingData data;
   
-  result = malloc(sizeof("000°"));
   compass_service_peek(&data);
-  snprintf(result, sizeof("000°"), "%d°", 365-TRIGANGLE_TO_DEG((int)data.true_heading));
-  return result;
+  return 365-TRIGANGLE_TO_DEG((int)data.true_heading);
 }
 
 static void tick_handler(struct tm *tick_time, TimeUnits units_changed) {
@@ -128,9 +126,11 @@ static void tick_handler(struct tm *tick_time, TimeUnits units_changed) {
     text_layer_set_text(calibrating_layer,calibrating);    
   }
   if (data.compass_status == CompassStatusDataInvalid) {
-    text_layer_set_text(degrees_layer, "---°");
+    strcpy(degrees_text,"---°");
+    text_layer_set_text(degrees_layer, degrees_text);
   } else {
-    text_layer_set_text(degrees_layer, get_compass_heading());
+    snprintf(degrees_text,sizeof(degrees_text),"%3i°",get_compass_heading());
+    text_layer_set_text(degrees_layer, degrees_text);
   }
   
   // rotate needle accordingly
@@ -142,14 +142,13 @@ static void tick_handler(struct tm *tick_time, TimeUnits units_changed) {
 static void select_click_handler(ClickRecognizerRef recognizer, void *context) {
   char buftime[] = "00:00:00";
   char *buffer;
-  char *heading;
+  int heading;
 
   if (bar_i < LOGITEMS) {
     buffer = malloc(sizeof("00:00:00 000°"));
     strftime(buftime, sizeof("00:00:00"), "%X", localtime((time_t *) &seconds_elapsed));
     heading = get_compass_heading();
-    snprintf(buffer, sizeof("00:00:00 000°"), "%s %s", buftime, heading);
-    free(heading);
+    snprintf(buffer, sizeof("00:00:00 000°"), "%s %i°", buftime, heading);
     bar_readings[bar_i] = buffer;
     bar_i += 1;
     vibes_short_pulse();
@@ -163,9 +162,6 @@ static void select_multi_click_handler(ClickRecognizerRef recognizer, void *cont
   render_time();
   bar = 200;
   render_bar();
-  //for (int i=0; i<bar_i; i++) {
-  //  free(bar_readings[bar_i]);
-  //}
   bar_i = 0;
   text_layer_set_text(degrees_layer, "");      
 }
@@ -191,6 +187,8 @@ static void down_click_handler(ClickRecognizerRef recognizer, void *context) {
 
 static void click_config_provider(void *context) {
   window_single_click_subscribe(BUTTON_ID_SELECT, select_click_handler);
+  window_long_click_subscribe(BUTTON_ID_UP, 1000, select_click_handler, NULL);
+  window_long_click_subscribe(BUTTON_ID_DOWN, 1000, select_click_handler, NULL);
   window_multi_click_subscribe(BUTTON_ID_SELECT, 2, 10, 0, true, select_multi_click_handler);
   window_long_click_subscribe(BUTTON_ID_SELECT, 1000, select_long_click_handler, NULL);
   window_single_click_subscribe(BUTTON_ID_UP, up_click_handler);
@@ -252,7 +250,6 @@ static void window_load(Window *window) {
   // Calibration label
   calibrating_layer = text_layer_create((GRect) { .origin = { 60, 85 }, .size = { bounds.size.w, 20 } });
   text_layer_set_text(calibrating_layer, "");
-//  text_layer_set_font(calibrating_layer, fonts_get_system_font(FONT_KEY_));
   text_layer_set_text_alignment(calibrating_layer, GTextAlignmentLeft);
   layer_add_child(window_layer, text_layer_get_layer(calibrating_layer));
 }
