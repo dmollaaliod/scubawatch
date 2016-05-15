@@ -1,4 +1,4 @@
-#include <pebble.h>
+#include <pebble.h>    
 #define LOGITEMS 50
 #define VIBES_INTERVAL 300 // 5-minute interval
 
@@ -51,6 +51,7 @@ static int main_window = true;
 static void path_layer_update_callback(Layer *path, GContext *ctx) {
   // Draw the needles
   
+  graphics_context_set_fill_color(ctx, GColorRed);
   gpath_draw_filled(ctx, s_needle_north);       
   gpath_draw_outline(ctx, s_needle_south);                     
 
@@ -67,11 +68,11 @@ static void path_layer_update_callback(Layer *path, GContext *ctx) {
 static void render_time() {
   
   // Create a long-lived buffer
-  static char buffer[] = "00:00:00";
+  static char buffer[] = "20:00:00";
   
   // Write the elapsed time into the buffer
-  strftime(buffer, sizeof("00:00:00"), "%X", localtime((time_t *) &seconds_elapsed));
-
+  strftime(buffer, sizeof("00:00:00"), "%X", gmtime((time_t *) &seconds_elapsed));
+  //snprintf(buffer,sizeof(buffer), "%i", seconds_elapsed);
   // Display this time on the TextLayer
   text_layer_set_text(time_layer, buffer);
 }
@@ -87,7 +88,7 @@ static char *get_bar_reading() {
   char buftime[] = "00:00:00";
   
   result = malloc(sizeof("00:00:00 000 bar"));
-  strftime(buftime, sizeof("00:00:00"), "%X", localtime((time_t *) &seconds_elapsed));
+  strftime(buftime, sizeof("00:00:00"), "%X", gmtime((time_t *) &seconds_elapsed));
   snprintf(result, sizeof("00:00:00 000 bar"), "%s %i bar", buftime, bar);  
   return result;
 }
@@ -146,7 +147,7 @@ static void select_click_handler(ClickRecognizerRef recognizer, void *context) {
 
   if (bar_i < LOGITEMS) {
     buffer = malloc(sizeof("00:00:00 000°"));
-    strftime(buftime, sizeof("00:00:00"), "%X", localtime((time_t *) &seconds_elapsed));
+    strftime(buftime, sizeof("00:00:00"), "%X", gmtime((time_t *) &seconds_elapsed));
     heading = get_compass_heading();
     snprintf(buffer, sizeof("00:00:00 000°"), "%s %i°", buftime, heading);
     bar_readings[bar_i] = buffer;
@@ -156,13 +157,19 @@ static void select_click_handler(ClickRecognizerRef recognizer, void *context) {
 }
 
 static void select_multi_click_handler(ClickRecognizerRef recognizer, void *context) {
+  time_t now;
   // Reset timer
   seconds_elapsed = 0;
   seconds_next_vibes = VIBES_INTERVAL;
   render_time();
   bar = 200;
   render_bar();
-  bar_i = 0;
+  bar_readings[0] = malloc(sizeof("00/00/0000"));
+  bar_readings[1] = malloc(sizeof("00:00:00"));
+  now = time(NULL);
+  strftime(bar_readings[0], sizeof("00/00/0000"), "%d/%m/%Y", localtime(&now));
+  strftime(bar_readings[1], sizeof("00:00:00"), "%H:%M:%S", localtime(&now));
+  bar_i = 2;
   text_layer_set_text(degrees_layer, "");      
 }
 
@@ -203,8 +210,8 @@ static void window_load(Window *window) {
 
   // Time layer
   time_layer = text_layer_create((GRect) { .origin = { 0, 110 }, .size = { bounds.size.w, 40 } });
-  text_layer_set_background_color(time_layer, GColorBlack);
-  text_layer_set_text_color(time_layer, GColorClear);
+  text_layer_set_background_color(time_layer, GColorOxfordBlue);
+  text_layer_set_text_color(time_layer, GColorWhite);
   text_layer_set_font(time_layer, fonts_get_system_font(FONT_KEY_DROID_SERIF_28_BOLD));
   text_layer_set_text_alignment(time_layer, GTextAlignmentCenter);
   layer_add_child(window_layer, text_layer_get_layer(time_layer));
@@ -242,6 +249,7 @@ static void window_load(Window *window) {
   
   // Compass direction
   degrees_layer = text_layer_create((GRect) { .origin = { 60, 55 }, .size = { bounds.size.w, 40 } });
+  text_layer_set_text_color(degrees_layer, GColorDarkCandyAppleRed);
   text_layer_set_text(degrees_layer, "");
   text_layer_set_font(degrees_layer, fonts_get_system_font(FONT_KEY_BITHAM_30_BLACK));
   text_layer_set_text_alignment(degrees_layer, GTextAlignmentLeft);
@@ -249,6 +257,7 @@ static void window_load(Window *window) {
   
   // Calibration label
   calibrating_layer = text_layer_create((GRect) { .origin = { 60, 85 }, .size = { bounds.size.w, 20 } });
+  text_layer_set_text_color(calibrating_layer, GColorDarkCandyAppleRed);
   text_layer_set_text(calibrating_layer, "");
   text_layer_set_text_alignment(calibrating_layer, GTextAlignmentLeft);
   layer_add_child(window_layer, text_layer_get_layer(calibrating_layer));
@@ -269,12 +278,17 @@ static void log_window_load(Window *window) {
   main_window = false;
   
   log_scroll_layer = scroll_layer_create(bounds);
-  scroll_layer_set_content_size(log_scroll_layer, (GSize) { bounds.size.w, 25*bar_i });
+  scroll_layer_set_content_size(log_scroll_layer, (GSize) { bounds.size.w, 25*bar_i+8 });
   scroll_layer_set_click_config_onto_window(log_scroll_layer, window);
 
   for (int i=0; i<bar_i; i++) {
-    log_text_layer[i] = text_layer_create((GRect) { .origin = { 0, i*25 }, .size = { bounds.size.w, 25 } });
-    text_layer_set_font(log_text_layer[i], fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
+    if (i < 2) {
+      log_text_layer[i] = text_layer_create((GRect) { .origin = { 0, i*29 }, .size = { bounds.size.w, 29 } });
+      text_layer_set_font(log_text_layer[i], fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD));
+    } else {
+      log_text_layer[i] = text_layer_create((GRect) { .origin = { 0, i*25+8 }, .size = { bounds.size.w, 25 } });
+      text_layer_set_font(log_text_layer[i], fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));    
+    }
     text_layer_set_text(log_text_layer[i], bar_readings[i]);
     scroll_layer_add_child(log_scroll_layer, text_layer_get_layer(log_text_layer[i]));
   }

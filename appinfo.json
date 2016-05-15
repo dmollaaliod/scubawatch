@@ -4,6 +4,7 @@
         ""
     ],
     "companyName": "dmollaaliod@gmail.com",
+    "enableMultiJS": false,
     "longName": "Scubawatch",
     "projectType": "native",
     "resources": {
@@ -12,7 +13,7 @@
                 "file": "images/screenshot.png",
                 "menuIcon": true,
                 "name": "screenshot",
-                "type": "png"
+                "type": "bitmap"
             }
         ]
     },
@@ -23,7 +24,7 @@
         "basalt"
     ],
     "uuid": "3d701546-7fc9-4128-86c0-c61d5ec1c90a",
-    "versionLabel": "2.2",
+    "versionLabel": "2.3",
     "watchapp": {
         "watchface": false
     }
