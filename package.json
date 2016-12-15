@@ -1,0 +1,32 @@
+{
+    "author": "dmollaaliod@gmail.com",
+    "dependencies": {},
+    "keywords": [],
+    "name": "scubawatch",
+    "pebble": {
+        "displayName": "Scubawatch",
+        "enableMultiJS": false,
+        "messageKeys": [],
+        "projectType": "native",
+        "resources": {
+            "media": [
+                {
+                    "file": "images/screenshot.png",
+                    "menuIcon": true,
+                    "name": "screenshot",
+                    "type": "bitmap"
+                }
+            ]
+        },
+        "sdkVersion": "3",
+        "targetPlatforms": [
+            "aplite",
+            "basalt"
+        ],
+        "uuid": "3d701546-7fc9-4128-86c0-c61d5ec1c90a",
+        "watchapp": {
+            "watchface": false
+        }
+    },
+    "version": "2.3.0"
+}
